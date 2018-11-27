@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Generating genesis block..."
+WAVES_NETWORK_BYTE=${WAVES_NETWORK_BYTE} WAVES_HOST_OUTPUT_PATH=${WAVES_HOST_OUTPUT_PATH} WAVES_ACCOUNTS_COUNT=${WAVES_ACCOUNTS_COUNT} WAVES_AVERAGE_BLOCK_DELAY=${WAVES_AVERAGE_BLOCK_DELAY} /usr/bin/python3 /waves-mnt/genesis-settings-generator.py
