@@ -16,7 +16,6 @@ DEFAULT_LOG_LEVEL = 'DEBUG'
 DEFAULT_NETWORK = 'DEVNET'
 DEFAULT_API_ENABLE = 'yes'
 DEFAULT_AUTODETECT_ADDRESS = 'no'
-
 TOKENS_SUPPLY = 10000000000000
 
 addresses = []
@@ -37,7 +36,6 @@ if not isinstance(accounts_count, str):
     accounts_count = DEFAULT_ACCOUNTS_COUNT
 else:
     accounts_count = int(accounts_count)
-
 
 
 def generate_password(size=18, chars=string.ascii_letters + string.digits):
@@ -80,6 +78,7 @@ def append_data_service(compose_content, nodes_list):
 networks:
   default:
     driver: bridge
+    
 """
     return compose_content
 
@@ -91,8 +90,11 @@ def generate_compose(genesis_path):
 
     compose_content = "version: '3'\n\nservices:"
 
-    first_node_network_port = DEFAULT_NETWORK_PORT
     nodes_list = []
+    known_peers_list = []
+
+    for k in range(0, accounts_count):
+        known_peers_list.append(f"node{k}:6864")
 
     for k in range(0, accounts_count):
         if k > 0:
@@ -104,33 +106,23 @@ def generate_compose(genesis_path):
                 instance_api_port = f"{str(int(api_port) + k)}"
         else:
             instance_network_port = network_port
-            first_node_network_port = instance_network_port
             instance_api_port = api_port
 
         node_config_path = f"/waves-mnt/output/node{k}/configs"
-
         if not os.path.isdir(node_config_path):
             os.makedirs(node_config_path, exist_ok=True)
 
         config_content = ConfigFactory.parse_file(genesis_path)
-        if k > 0:
+        config_content['waves']['network'] = ConfigFactory.from_dict({
+            'known-peers': known_peers_list
+        })
 
-            config_content['waves']['network'] = ConfigFactory.from_dict({
-                'known-peers': [f"node0:{first_node_network_port}"]
-            })
         config_content = HOCONConverter.convert(config_content, 'hocon')
-
         config_path = f"/waves-mnt/output/node{k}/configs/local.conf"
         with open(config_path, 'w') as config_file:
             config_file.write(config_content)
 
-        if k > 0:
-            depends_on = "depends_on:\n"
-            for dependent in range(0, k):
-                depends_on = depends_on + f"      - node{dependent}\n"
-        else:
-            depends_on = ''
-        nodes_list.append(f"node{k}:{instance_api_port}")
+        nodes_list.append(f"node{k}:6869")
         compose_content += f"""
   node{k}:
     image: wavesplatform/node
@@ -144,14 +136,15 @@ def generate_compose(genesis_path):
       - WAVES_HEAP_SIZE={heap_size}
       - WAVES_AUTODETECT_ADDRESS={autodetect_address}
       - WAVES_AUTODETECT_ADDRESS_PORT={instance_network_port}
-      - WAVES__NETWORK__DECLARED_ADDRESS=node{k}:{instance_network_port}
+      - WAVES__NETWORK__DECLARED_ADDRESS=node{k}:6864
       - WAVES__REST_API__ENABLE={WAVES__REST_API__ENABLE}
       - WAVES__REST_API__PORT=6869
       - WAVES__REST_API__API_KEY_HASH=3z7LKtx9DwNVtEZ2whjZqrdZH8iWTZsdQYwWbgsxeXhm
       - WAVES__BLOCKCHAIN__CUSTOM__ADDRESS_SCHEME_CHARACTER={network_byte}
-      - WAVES__MINER__QUORUM=0
+      - WAVES__MINER__QUORUM={accounts_count - 1}
+      - WAVES__MINER__MIN_MICRO_BLOCK_AGE=2s
+      - WAVES__MINER__MICRO_BLOCK_INTERVAL=3s
       - WAVES__MINER__INTERVAL_AFTER_LAST_BLOCK_THEN_GENERATION_IS_ALLOWED=999d
-    {depends_on}
     restart: always
     networks:
       default:
@@ -209,7 +202,6 @@ if __name__ == "__main__":
     end_index = len(lines)
 
     for idx, line in enumerate(lines):
-        print(line)
         line = str(line).replace('[0minfo', '')
         line = line.replace('[0m', '')
         line = line.replace('[]', '')
@@ -225,7 +217,7 @@ if __name__ == "__main__":
 
     print('Genesis is ready')
 
-    config = f"""waves
+    config = f"""waves {{
         blockchain {{
           custom {{
             {genesis_data}
