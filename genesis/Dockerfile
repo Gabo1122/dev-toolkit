@@ -1,7 +1,7 @@
 FROM openjdk:10-jre-slim
-ENV WAVES_NETWORK_BYTE="C"
-ENV WAVES_AVERAGE_BLOCK_DELAY="60s"
-ENV WAVES_SEED_COUNT=5
+ENV WAVES_NETWORK_BYTE="D"
+ENV WAVES_AVERAGE_BLOCK_DELAY="15s"
+ENV WAVES_SEED_COUNT=4
 ENV WAVES_INITIAL_BALANCE=10000000000000000
 
 
@@ -32,10 +32,7 @@ RUN git clone https://github.com/wavesplatform/Waves.git
 
 WORKDIR /waves-genesis/Waves
 RUN git fetch --all --tags --prune
-RUN git checkout tags/v0.15.1 -b 0-15-1
-
-
-RUN sbt "test:runMain tools.GenesisBlockGenerator /waves-genesis/Waves/src/test/resources/genesis.example.conf"
+RUN git checkout tags/v1.0.0 -b 1-0-0
 
 WORKDIR /waves-genesis
 VOLUME /waves-mnt

@@ -5,7 +5,7 @@ import string
 import random
 
 
-DEFAULT_NETWORK_BYTE = 'C'
+DEFAULT_NETWORK_BYTE = 'D'
 DEFAULT_ACCOUNTS_COUNT = 1
 DEFAULT_AVERAGE_BLOCK_DELAY = 10
 
@@ -16,7 +16,7 @@ DEFAULT_LOG_LEVEL = 'DEBUG'
 DEFAULT_NETWORK = 'DEVNET'
 DEFAULT_API_ENABLE = 'yes'
 DEFAULT_AUTODETECT_ADDRESS = 'no'
-TOKENS_SUPPLY = 10000000000000
+TOKENS_SUPPLY = 10000000000000000
 
 addresses = []
 
@@ -61,20 +61,27 @@ def create_accounts():
 def append_data_service(compose_content, nodes_list):
     compose_content += f"""
   data-service-explorer:
-    image: wavesplatform/data-service-explorer
+    hostname: explorer
+    image: wavesplatform/explorer:toolkit
     environment:
-      - WAVES_NETWORK_BYTE={network_byte}
-      - WAVES_NODES_LIST={','.join(nodes_list)}
+      - API_NODE_URL=http://{nodes_list[0]}
+      - NODE_LIST={','.join(["http://" + s for s in nodes_list])}
     depends_on:
       - node0
     restart: always
     ports:
-      - "8080:3000"
+      - "3000:8080"
     networks:
       default:
         aliases:
           - data-service-explorer
           - data-service-explorer.waves
+  resolver:
+    hostname: resolvable
+    image: mgood/resolvable
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+      - /etc/resolv.conf:/tmp/resolv.conf
 networks:
   default:
     driver: bridge
@@ -125,6 +132,7 @@ def generate_compose(genesis_path):
         nodes_list.append(f"node{k}:6869")
         compose_content += f"""
   node{k}:
+    hostname: node{k}
     image: wavesplatform/node
     environment:
       - WAVES__NETWORK__NODE_NAME=node{k}
@@ -169,7 +177,7 @@ if __name__ == "__main__":
 
     amount_per_user = TOKENS_SUPPLY / len(accounts)
 
-    genesis_example_conf = "/waves-genesis/Waves/src/test/resources/genesis.example.conf"
+    genesis_example_conf = "/waves-genesis/Waves/node/src/test/resources/genesis.example.conf"
     conf = ConfigFactory.parse_file(genesis_example_conf)
 
     conf['genesis-generator']['average-block-delay'] = str(average_block_delay) + 's'
@@ -177,13 +185,16 @@ if __name__ == "__main__":
 
     distributions = dict()
     for x in range(0, len(accounts)):
-        distributions[accounts[x]['seed']] = amount_per_user
+        distributions[f"address{x}"] = dict()
+        distributions[f"address{x}"]["seed-text"] = accounts[x]['seed']
+        distributions[f"address{x}"]["nonce"] = 0
+        distributions[f"address{x}"]["amount"] = amount_per_user
 
     conf['genesis-generator']['distributions'] = ConfigFactory.from_dict(distributions)
 
     local_conf = HOCONConverter.convert(conf, 'hocon')
 
-    genesis_conf_path = "/waves-genesis/Waves/src/test/resources/genesis.conf"
+    genesis_conf_path = "/waves-genesis/Waves/node/src/test/resources/genesis.conf"
 
     with open(genesis_conf_path, 'w') as file:
         file.write(local_conf)
@@ -191,7 +202,7 @@ if __name__ == "__main__":
     with open('/waves-mnt/genesis.conf', 'w') as file:
         file.write(local_conf)
 
-    run_command = f"test:runMain tools.GenesisBlockGenerator {genesis_conf_path}"
+    run_command = f"node/runMain com.wavesplatform.GenesisBlockGenerator {genesis_conf_path}"
     result_lines = subprocess.run(['sbt', run_command], universal_newlines=True, stdout=subprocess.PIPE,
                                   cwd="/waves-genesis/Waves")
 
